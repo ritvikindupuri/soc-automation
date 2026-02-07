@@ -1,4 +1,4 @@
-# 🛡️ Enterprise-Grade Threat Intelligence Automation in n8n
+#  Enterprise-Grade Threat Intelligence Automation in n8n
 
 ## Executive Summary
 This project is a **38-node security automation workflow** built in **n8n** that functions as an autonomous SOC Analyst. It orchestrates the entire threat lifecycle—from multi-source data collection and deduplication to real-time risk scoring and automated remediation.
@@ -24,9 +24,9 @@ To use this automation in your own n8n instance:
 
 ---
 
-## 🎯 Detailed Workflow Breakdown
+##  Detailed Workflow Breakdown
 
-### 🌊 FLOW 1: Scheduled Threat Intelligence Collection
+###  FLOW 1: Scheduled Threat Intelligence Collection
 * **Node 1: Schedule Trigger**
     * *Purpose:* Initiates the collection pipeline.
     * *Configuration:* Runs at minute 0 of every hour (`0 * * * *`).
@@ -47,7 +47,7 @@ To use this automation in your own n8n instance:
     * *Logic:* Uses a `Set` data structure to track unique IPs.
     * *Priority:* Retains the entry with the highest confidence score if duplicates are found.
 
-### ⚡ FLOW 2: Real-Time Threat Alert Processing
+###  FLOW 2: Real-Time Threat Alert Processing
 * **Node 8: Webhook Trigger**
     * *Method:* POST
     * *Path:* `/threat-alert`
@@ -61,7 +61,7 @@ To use this automation in your own n8n instance:
 * **Node 11: Format Enriched Data (Code Node)**
     * *Logic:* Merges geolocation context into the threat object and adds a processing timestamp.
 
-### 🔍 FLOW 3: Manual Threat Investigation (Ad-Hoc)
+###  FLOW 3: Manual Threat Investigation (Ad-Hoc)
 * **Node 12: Manual Trigger**
     * *Use Case:* Analyst clicks "Test Workflow" for specific threat hunting.
 * **Node 13: Input IP Address (Set Node)**
@@ -76,7 +76,7 @@ To use this automation in your own n8n instance:
 * **Node 19: Aggregate Intelligence (Code Node)**
     * *Logic:* Calculates average confidence, lists all detected threat types, and identifies the highest severity rating across all sources.
 
-### 🧠 FLOW 4: Risk Scoring Engine
+###  FLOW 4: Risk Scoring Engine
 * **Node 20: Calculate Base Risk Score (Code Node)**
     * *Formula:*
       ```javascript
@@ -111,22 +111,22 @@ To use this automation in your own n8n instance:
 * **Node 28: Trigger Firewall Block (HTTP Request)**
     * *Action:* API call to Firewall (e.g., pfSense/Cisco) to add IP to blocklist permanently.
 
-### ⚠️ FLOW 7: High Threat Response (51-75)
+###  FLOW 7: High Threat Response (51-75)
 * **Nodes 29-31:** Formats alert, sends non-urgent email, and posts to `#security-monitoring` Slack channel.
 * **Node 32: Add to Watch List (HTTP Request)**
     * *Action:* Tags IP for enhanced logging in the monitoring system.
 
-### 📝 FLOW 8: Medium/Low Threat Logging (<51)
+###  FLOW 8: Medium/Low Threat Logging (<51)
 * **Nodes 33-35:** Formats log entry, sends payload to SIEM (Splunk/ELK/QRadar), and updates internal threat database.
 
-### 📊 FLOW 9: Reporting & Analytics
+###  FLOW 9: Reporting & Analytics
 * **Node 36: Daily Summary Trigger:** Runs daily at 8:00 AM.
 * **Node 37: Query Threat Data:** Retrieves all records where `timestamp > (now - 24h)`.
 * **Node 38: Generate Summary Report:** Calculates total threats, severity breakdown, top 10 malicious IPs, and geographic trends.
 
 ---
 
-## 🛠️ Configuration & Setup Guide
+##  Configuration & Setup Guide
 
 ### Step 1: Create Data Tables (CRITICAL)
 *Data tables are not created automatically. You must configure this manually first.*
@@ -167,7 +167,7 @@ External systems must send POST requests to your production Webhook URL with the
 
 ---
 
-## 📊 Impact & Outcomes
+##  Impact & Outcomes
 * **Response Time:** Critical threats are blocked at the firewall level within seconds of detection.
 * **Accuracy:** Multi-source correlation and the custom risk scoring engine drastically reduce false positives.
 * **Scalability:** The modular design allows for adding new threat feeds (Nodes 4-5) without disrupting the core logic.
