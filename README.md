@@ -158,6 +158,8 @@ External systems must send POST requests to your production Webhook URL with the
   "severity": "high",
   "timestamp": "2024-01-15T10:30:00Z"
 }
+```
+
 
 ### Step 5: SIEM & Firewall Integration
 * **Splunk:** POST to `https://splunk:8088/services/collector` with Header `Authorization: Splunk [HEC_TOKEN]`.
