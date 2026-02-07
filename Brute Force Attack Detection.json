@@ -1,0 +1,1336 @@
+{
+  "name": "Brute Force Attack Detection",
+  "nodes": [
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "failed",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6d558627-820f-4ea8-8385-af4a90fde4df",
+      "name": "Filter Failed Logins",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        704,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "id-1",
+              "name": "ipAddress",
+              "value": "={{ $json.ip || $json.ipAddress || $json.source_ip }}",
+              "type": "string"
+            },
+            {
+              "id": "id-2",
+              "name": "username",
+              "value": "={{ $json.username || $json.user || $json.email }}",
+              "type": "string"
+            },
+            {
+              "id": "id-3",
+              "name": "timestamp",
+              "value": "={{ $json.timestamp || $json.time || $now }}",
+              "type": "string"
+            },
+            {
+              "id": "id-4",
+              "name": "attemptId",
+              "value": "={{ $json.id || $json.attemptId || $runIndex }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "45f121d2-cded-40b4-9f19-e1bbcfcdfed4",
+      "name": "Extract Key Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        944,
+        784
+      ]
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "id": "7d817fee-ca28-4982-8aac-a455720ab9ed",
+      "name": "Collect Attempts",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        1168,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "fieldsToSummarize": {
+          "values": [
+            {
+              "field": "attemptId"
+            }
+          ]
+        },
+        "fieldsToSplitBy": "ipAddress",
+        "options": {
+          "skipEmptySplitFields": false
+        }
+      },
+      "id": "e751523d-b8e2-4533-a0ce-0c74ce63d574",
+      "name": "Count Attempts by IP",
+      "type": "n8n-nodes-base.summarize",
+      "typeVersion": 1.1,
+      "position": [
+        1376,
+        592
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "id-1",
+              "leftValue": "={{ $json.attemptId_count }}",
+              "rightValue": "={{ $('Workflow Configuration').item.json.threshold }}",
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "0ffb8d37-ff68-4334-8bb7-11ea49293b55",
+      "name": "Check Threshold Exceeded",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1600,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "id-1",
+              "name": "alertTitle",
+              "value": "={{ '🚨 BRUTE FORCE ATTACK DETECTED' }}",
+              "type": "string"
+            },
+            {
+              "id": "id-2",
+              "name": "ipAddress",
+              "value": "={{ $json.ipAddress }}",
+              "type": "string"
+            },
+            {
+              "id": "id-3",
+              "name": "attemptCount",
+              "value": "={{ $json.attemptId_count }}",
+              "type": "number"
+            },
+            {
+              "id": "id-4",
+              "name": "targetUsername",
+              "value": "={{ $json.username }}",
+              "type": "string"
+            },
+            {
+              "id": "id-5",
+              "name": "detectionTime",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            },
+            {
+              "id": "id-6",
+              "name": "severity",
+              "value": "={{ $json.attemptId_count >= 10 ? 'CRITICAL' : 'HIGH' }}",
+              "type": "string"
+            },
+            {
+              "id": "id-7",
+              "name": "emailBody",
+              "value": "={{ 'A brute force attack has been detected:\\n\\nIP Address: ' + $json.ipAddress + '\\nFailed Attempts: ' + $json.attemptId_count + '\\nTarget Username: ' + $json.username + '\\nDetection Time: ' + $now.toISO() + '\\nSeverity: ' + ($json.attemptId_count >= 10 ? 'CRITICAL' : 'HIGH') + '\\n\\nImmediate action recommended: Review logs and consider blocking this IP address.' }}",
+              "type": "string"
+            },
+            {
+              "id": "id-8",
+              "name": "slackMessage",
+              "value": "={{ ':rotating_light: *BRUTE FORCE ATTACK DETECTED*\\n\\n*IP Address:* `' + $json.ipAddress + '`\\n*Failed Attempts:* ' + $json.attemptId_count + '\\n*Target Username:* ' + $json.username + '\\n*Detection Time:* ' + $now.toISO() + '\\n*Severity:* ' + ($json.attemptId_count >= 10 ? ':red_circle: CRITICAL' : ':orange_circle: HIGH') + '\\n\\n_Immediate action recommended_' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cb05806d-7ae9-4ef6-a947-2257ad7457d0",
+      "name": "Format Alert Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1824,
+        592
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "security@company.com",
+        "toEmail": "security-team@company.com",
+        "subject": "={{ '[' + $json.severity + '] Brute Force Attack Detected - IP: ' + $json.ipAddress }}",
+        "emailFormat": "text",
+        "text": "={{ $json.emailBody }}",
+        "options": {}
+      },
+      "id": "990eaec4-ed06-40ac-b8a0-fe1c674197ab",
+      "name": "Email Security Team",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        2176,
+        480
+      ],
+      "webhookId": "9e4a84c1-7f50-4003-8862-296c25204eff"
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "#security-alerts"
+        },
+        "text": "={{ $json.slackMessage }}",
+        "otherOptions": {
+          "sendAsUser": "Security Bot"
+        }
+      },
+      "id": "1c32579f-89c3-4485-b6a8-752c918974a1",
+      "name": "Notify Slack Channel",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [
+        2128,
+        640
+      ],
+      "webhookId": "f7b33003-fcb4-4e06-84e5-dae1cb8769b2"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "<__PLACEHOLDER_VALUE__firewall_api_endpoint__>",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"action\": \"block\", \"ipAddress\": $json.ipAddress, \"reason\": \"Brute force attack detected\", \"attemptCount\": $json.attemptCount, \"severity\": $json.severity } }}",
+        "options": {}
+      },
+      "id": "8654c12d-0dfe-4625-aeab-98e5062441ef",
+      "name": "Block IP Address",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2048,
+        880
+      ]
+    },
+    {
+      "parameters": {
+        "search": "=index=security sourcetype=brute_force_attack | eval ip_address=\"{{ $json.ipAddress }}\", attempt_count={{ $json.attemptCount }}, severity=\"{{ $json.severity }}\", target_username=\"{{ $json.targetUsername }}\", detection_time=\"{{ $json.detectionTime }}\"",
+        "additionalFields": {
+          "earliest_time": "-24h",
+          "latest_time": "now"
+        }
+      },
+      "id": "6a2ef3af-fa6b-4ed0-bd3c-0920683ac18c",
+      "name": "Send to Splunk",
+      "type": "n8n-nodes-base.splunk",
+      "typeVersion": 2,
+      "position": [
+        2048,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes"
+            }
+          ]
+        }
+      },
+      "id": "d6878f57-fdf6-4acb-93df-34c9129d4697",
+      "name": "Poll Splunk Every 5 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        704,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "search": "search index=security sourcetype=login_attempts status=failed earliest=-5m",
+        "additionalFields": {
+          "earliest_time": "-5m",
+          "latest_time": "now"
+        }
+      },
+      "id": "02840f45-ff66-4329-8ae7-976a2708a01a",
+      "name": "Get Security Logs from Splunk",
+      "type": "n8n-nodes-base.splunk",
+      "typeVersion": 2,
+      "position": [
+        928,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "results",
+        "options": {}
+      },
+      "id": "55963305-50df-4a1c-a67b-5fde62cd7fc8",
+      "name": "Split Log Entries",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        1152,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Analyze this security event data: {{ $json }}. Identify threat level, calculate risk score, and recommend response actions.",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are a security threat analyst. Analyze login attempts and security events to identify brute force attacks, suspicious patterns, and threat indicators. Provide risk scores and recommended actions."
+        }
+      },
+      "id": "1aacb43b-6bb0-40b9-a921-4e9ac4d2c4d8",
+      "name": "AI Threat Analyzer",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1824,
+        432
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "4b81717e-10c3-403b-9956-f0ee7c5f41e4",
+      "name": "OpenAI GPT-4",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1360,
+        816
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "4TDPRtH4ghsFcAjh",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n\t\"type\": \"object\",\n\t\"properties\": {\n\t\t\"threatLevel\": {\n\t\t\t\"type\": \"string\",\n\t\t\t\"enum\": [\"CRITICAL\", \"HIGH\", \"MEDIUM\", \"LOW\"]\n\t\t},\n\t\t\"riskScore\": {\n\t\t\t\"type\": \"number\"\n\t\t},\n\t\t\"indicators\": {\n\t\t\t\"type\": \"array\",\n\t\t\t\"items\": {\n\t\t\t\t\"type\": \"string\"\n\t\t\t}\n\t\t},\n\t\t\"recommendedActions\": {\n\t\t\t\"type\": \"array\",\n\t\t\t\"items\": {\n\t\t\t\t\"type\": \"string\"\n\t\t\t}\n\t\t}\n\t},\n\t\"required\": [\"threatLevel\", \"riskScore\"]\n}"
+      },
+      "id": "acfd9ab3-3d13-472f-a02d-622e74df0886",
+      "name": "Structured Threat Output",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        2608,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Query threat intelligence APIs to check IP reputation and known threat indicators",
+        "url": "<__PLACEHOLDER_VALUE__threat_intel_api__>",
+        "options": {}
+      },
+      "id": "f2f02e3a-4b03-4a95-a150-561e1e25350c",
+      "name": "Threat Intelligence API Tool",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        1616,
+        784
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "76520c90-bd02-4bd0-89ca-1445ccc661f9",
+      "name": "Risk Score Calculator",
+      "type": "@n8n/n8n-nodes-langchain.toolCalculator",
+      "typeVersion": 1,
+      "position": [
+        1760,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "contextWindowLength": 10
+      },
+      "id": "cac02302-712c-439d-9629-0d2549bfa438",
+      "name": "Threat Context Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        1504,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Search Splunk for historical security events and related incidents",
+        "operation": "getResult",
+        "searchJobId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $fromAI('searchJobId', 'The Splunk search job ID to retrieve results from', 'string') }}"
+        },
+        "filters": {},
+        "options": {}
+      },
+      "id": "14698782-15c8-4cf8-a7e3-ec375f5f78b1",
+      "name": "Splunk Investigation Tool",
+      "type": "n8n-nodes-base.splunkTool",
+      "typeVersion": 2,
+      "position": [
+        1872,
+        816
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.threatLevel }}",
+                    "rightValue": "CRITICAL",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Critical"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.threatLevel }}",
+                    "rightValue": "HIGH",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "High"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.threatLevel }}",
+                    "rightValue": "MEDIUM",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Medium"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.threatLevel }}",
+                    "rightValue": "LOW",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Low"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "347cce85-da18-499e-ad85-8a0cb21740c4",
+      "name": "Route by Threat Severity",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        2768,
+        464
+      ]
+    },
+    {
+      "parameters": {
+        "descriptionType": "auto",
+        "authentication": "apiToken",
+        "resource": "incident",
+        "operation": "create",
+        "title": "={{ $fromAI('title', 'Incident title', 'string') }}",
+        "serviceId": "={{ $fromAI('serviceId', 'PagerDuty service ID', 'string') }}",
+        "email": "={{ $fromAI('email', 'Email address for incident', 'string') }}",
+        "additionalFields": {},
+        "conferenceBridgeUi": {}
+      },
+      "id": "ba69e041-cbb3-43cb-8c09-19a0f9934ceb",
+      "name": "PagerDuty Incident Tool",
+      "type": "n8n-nodes-base.pagerDutyTool",
+      "typeVersion": 1,
+      "position": [
+        2000,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "project": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $fromAI('project', 'Jira project key', 'string') }}"
+        },
+        "issueType": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $fromAI('issueType', 'Issue type like Bug or Task', 'string') }}"
+        },
+        "summary": "={{ $fromAI('summary', 'Issue summary', 'string') }}",
+        "additionalFields": {}
+      },
+      "id": "347457e6-eddf-44e9-95aa-fe9131889d10",
+      "name": "Jira Ticket Tool",
+      "type": "n8n-nodes-base.jiraTool",
+      "typeVersion": 1,
+      "position": [
+        2208,
+        816
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "id-1",
+              "name": "incidentTitle",
+              "value": "={{ '[CRITICAL] ' + $json.alertTitle }}",
+              "type": "string"
+            },
+            {
+              "id": "id-2",
+              "name": "ipAddress",
+              "value": "={{ $json.ipAddress }}",
+              "type": "string"
+            },
+            {
+              "id": "id-3",
+              "name": "threatLevel",
+              "value": "={{ $json.threatLevel }}",
+              "type": "string"
+            },
+            {
+              "id": "id-4",
+              "name": "riskScore",
+              "value": "={{ $json.riskScore }}",
+              "type": "number"
+            },
+            {
+              "id": "id-5",
+              "name": "detectionTime",
+              "value": "={{ $json.detectionTime }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d5abcd33-e4e2-4c75-8736-483db0b15a3c",
+      "name": "Prepare Critical Incident Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2992,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "apiToken",
+        "resource": "incident",
+        "operation": "create",
+        "title": "={{ $json.incidentTitle }}",
+        "serviceId": "<__PLACEHOLDER_VALUE__pagerduty_service_id__>",
+        "email": "security-oncall@company.com",
+        "additionalFields": {},
+        "conferenceBridgeUi": {}
+      },
+      "id": "b7e84ffa-48c9-48fc-8ece-48c98f8077e9",
+      "name": "Create PagerDuty Alert",
+      "type": "n8n-nodes-base.pagerDuty",
+      "typeVersion": 1,
+      "position": [
+        3216,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "id-1",
+              "name": "ticketSummary",
+              "value": "={{ '[HIGH] Security Alert: ' + $json.ipAddress }}",
+              "type": "string"
+            },
+            {
+              "id": "id-2",
+              "name": "description",
+              "value": "={{ 'Threat Level: ' + $json.threatLevel + '\\nRisk Score: ' + $json.riskScore + '\\nIP: ' + $json.ipAddress }}",
+              "type": "string"
+            },
+            {
+              "id": "id-3",
+              "name": "priority",
+              "value": "HIGH",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "565704bc-254a-47ab-a586-7d782c6377e1",
+      "name": "Prepare High Priority Ticket",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2992,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "project": {
+          "__rl": true,
+          "mode": "list",
+          "value": "<__PLACEHOLDER_VALUE__jira_project__>"
+        },
+        "issueType": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Security Incident"
+        },
+        "summary": "={{ $json.ticketSummary }}",
+        "additionalFields": {
+          "description": "={{ $json.description }}"
+        }
+      },
+      "id": "16353060-38e9-445c-957f-e0b331b45934",
+      "name": "Create Jira Security Ticket",
+      "type": "n8n-nodes-base.jira",
+      "typeVersion": 1,
+      "position": [
+        3216,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "id-1",
+              "name": "ipAddress",
+              "value": "={{ $json.ipAddress }}",
+              "type": "string"
+            },
+            {
+              "id": "id-2",
+              "name": "threatLevel",
+              "value": "={{ $json.threatLevel }}",
+              "type": "string"
+            },
+            {
+              "id": "id-3",
+              "name": "riskScore",
+              "value": "={{ $json.riskScore }}",
+              "type": "number"
+            },
+            {
+              "id": "id-4",
+              "name": "timestamp",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            },
+            {
+              "id": "id-5",
+              "name": "indicators",
+              "value": "={{ $json.indicators }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c97df0a0-8511-4f02-9b49-541ae2186264",
+      "name": "Prepare Threat Intelligence Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        3216,
+        704
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "<__PLACEHOLDER_VALUE__threat_intelligence_table__>"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "ipAddress",
+              "keyValue": "={{ $json.ipAddress }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": null
+        },
+        "options": {}
+      },
+      "id": "a7f3c4c3-f7a7-4178-9ecc-49c451c6876d",
+      "name": "Store Threat Intelligence",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        3440,
+        704
+      ]
+    },
+    {
+      "parameters": {
+        "mergeByFields": {
+          "values": [
+            {}
+          ]
+        },
+        "options": {}
+      },
+      "id": "839142d1-bce7-45f2-a52f-dfe995bcb217",
+      "name": "Detect New Threats",
+      "type": "n8n-nodes-base.compareDatasets",
+      "typeVersion": 2.3,
+      "position": [
+        3664,
+        672
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "Search historical threat intelligence data and known attack patterns",
+        "memoryKey": {
+          "__rl": true,
+          "mode": "id",
+          "value": "threatIntelligence"
+        }
+      },
+      "id": "721bb73d-5c4f-4f83-b798-c7c48b736661",
+      "name": "Threat Intelligence Knowledge Base",
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreInMemory",
+      "typeVersion": 1.3,
+      "position": [
+        2304,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "0217fd10-a653-4bc8-b907-5abc46b4fd71",
+      "name": "OpenAI Embeddings",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        2352,
+        928
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "4TDPRtH4ghsFcAjh",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Advanced threat correlation logic\nconst items = $input.all();\nconst correlatedThreats = [];\n\nfor (const item of items) {\n  const threat = item.json;\n  \n  // Calculate correlation score\n  let correlationScore = 0;\n  if (threat.riskScore > 80) correlationScore += 30;\n  if (threat.threatLevel === 'CRITICAL') correlationScore += 40;\n  if (threat.indicators && threat.indicators.length > 3) correlationScore += 30;\n  \n  correlatedThreats.push({\n    ...threat,\n    correlationScore,\n    correlatedAt: new Date().toISOString()\n  });\n}\n\nreturn correlatedThreats.map(t => ({ json: t }));"
+      },
+      "id": "58941111-8c03-4963-98be-f9ffac2a5ef2",
+      "name": "Advanced Threat Correlation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2912,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "id": "9d2aa659-3d68-4c76-a926-4a9177febb37",
+      "name": "Aggregate Incident Reports",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        3440,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "incident",
+        "operation": "create",
+        "short_description": "={{ 'Security Incident Summary - ' + $now.toISO() }}",
+        "additionalFields": {
+          "description": "={{ 'Aggregated security incidents from brute force detection system. Total incidents: ' + $json.length }}"
+        }
+      },
+      "id": "5dceab02-31bd-4c29-8f59-026905e1ccf6",
+      "name": "Create ServiceNow Incident",
+      "type": "n8n-nodes-base.serviceNow",
+      "typeVersion": 1,
+      "position": [
+        3664,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "content": "📊 SPLUNK DATA PIPELINE\n\nThis section polls Splunk every 5 minutes for failed login attempts and security events. The data flows through filtering and extraction before analysis."
+      },
+      "id": "a45c201c-f8d9-47e0-9c0c-709363ffe1ac",
+      "name": "Note: Splunk Data Pipeline",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        704,
+        5712
+      ]
+    },
+    {
+      "parameters": {
+        "content": "🤖 AI-POWERED ANALYSIS\n\nThe AI Threat Analyzer uses GPT-4 with multiple tools to assess threats, calculate risk scores, and determine appropriate responses based on threat intelligence."
+      },
+      "id": "8b463c95-3abd-4299-b122-831313ce7f5a",
+      "name": "Note: AI-Powered Analysis",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        704,
+        5712
+      ]
+    },
+    {
+      "parameters": {
+        "content": "🔀 INTELLIGENT ROUTING\n\nThreats are routed based on severity:\n- CRITICAL → PagerDuty alerts\n- HIGH → Jira tickets\n- MEDIUM/LOW → Threat intelligence storage"
+      },
+      "id": "02cdc203-7e32-4292-a26e-13c2db907a83",
+      "name": "Note: Intelligent Routing",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        704,
+        5712
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Filter Failed Logins": {
+      "main": [
+        [
+          {
+            "node": "Extract Key Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Key Fields": {
+      "main": [
+        [
+          {
+            "node": "Collect Attempts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Attempts": {
+      "main": [
+        [
+          {
+            "node": "Count Attempts by IP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Count Attempts by IP": {
+      "main": [
+        [
+          {
+            "node": "Check Threshold Exceeded",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Threshold Exceeded": {
+      "main": [
+        [
+          {
+            "node": "Format Alert Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Alert Message": {
+      "main": [
+        [
+          {
+            "node": "Email Security Team",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Notify Slack Channel",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Block IP Address",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send to Splunk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Slack Channel": {
+      "main": [
+        []
+      ]
+    },
+    "Poll Splunk Every 5 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Get Security Logs from Splunk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Security Logs from Splunk": {
+      "main": [
+        [
+          {
+            "node": "Split Log Entries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Log Entries": {
+      "main": [
+        [
+          {
+            "node": "AI Threat Analyzer",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Filter Failed Logins",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI GPT-4": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Threat Analyzer",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Threat Output": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Threat Analyzer",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Threat Intelligence API Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Threat Analyzer",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Risk Score Calculator": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Threat Analyzer",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Threat Context Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Threat Analyzer",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Splunk Investigation Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Threat Analyzer",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PagerDuty Incident Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Threat Analyzer",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Jira Ticket Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Threat Analyzer",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Threat Intelligence Knowledge Base": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Threat Analyzer",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Embeddings": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Threat Intelligence Knowledge Base",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Threat Analyzer": {
+      "main": [
+        [
+          {
+            "node": "Route by Threat Severity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Threat Severity": {
+      "main": [
+        [
+          {
+            "node": "Prepare Critical Incident Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare High Priority Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Advanced Threat Correlation",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Advanced Threat Correlation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Critical Incident Data": {
+      "main": [
+        [
+          {
+            "node": "Create PagerDuty Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare High Priority Ticket": {
+      "main": [
+        [
+          {
+            "node": "Create Jira Security Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Advanced Threat Correlation": {
+      "main": [
+        [
+          {
+            "node": "Prepare Threat Intelligence Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Threat Intelligence Data": {
+      "main": [
+        [
+          {
+            "node": "Store Threat Intelligence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create PagerDuty Alert": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Incident Reports",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Jira Security Ticket": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Incident Reports",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Incident Reports": {
+      "main": [
+        [
+          {
+            "node": "Create ServiceNow Incident",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Threat Intelligence": {
+      "main": [
+        [
+          {
+            "node": "Detect New Threats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "3d6c373e-fb65-4f20-80ff-60a6c4444fe6",
+  "meta": {
+    "instanceId": "21d94564b5c205025383bd1e1717b3263f901f837d66ca59c649afeeaacf7ca8"
+  },
+  "id": "IF11pV9SpTvxGnh0VoNts",
+  "tags": []
+}
