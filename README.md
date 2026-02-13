@@ -1,17 +1,17 @@
-#  Enterprise-Grade Threat Intelligence Automation in n8n
+# 🛡️ Enterprise-Grade Splunk & AI Threat Hunting Automation (n8n)
 
 ## Executive Summary
-This project is a **38-node security automation workflow** built in **n8n** that functions as an autonomous SOC Analyst. It orchestrates the entire threat lifecycle—from multi-source data collection and deduplication to real-time risk scoring and automated remediation.
+This project is an advanced **Security Orchestration, Automation, and Response (SOAR)** pipeline built in **n8n**. It functions as an autonomous, Agentic AI SOC Analyst that continuously monitors Splunk telemetry, investigates suspicious behavior, and executes tiered incident response.
 
-The system processes security threats in real-time, leveraging a custom weighted risk engine to distinguish between noise and critical indicators, triggering firewall blocks and P1 tickets only when necessary.
+Instead of relying on static, hard-coded rules, this system utilizes an **AI Threat Analyzer (powered by GPT-4)** equipped with custom tools. When a brute-force or anomalous login threshold is breached, the AI autonomously queries threat intelligence, searches historical Splunk data, calculates risk scores, and can even trigger active IP blocking before routing the incident to the appropriate ticketing platform (ServiceNow, PagerDuty, or Jira).
 
 ## System Architecture
-The workflow is divided into **9 distinct flows** that handle specific stages of the intelligence pipeline.
+The workflow is a complex, multi-stage pipeline combining deterministic log parsing with non-deterministic, agentic AI analysis.
 
 <p align="center">
-  <img src=".assets/Screenshot 2026-02-06 200956.png" alt="Full 38-Node n8n Workflow" width="850"/>
+  <img src=".assets/Screenshot 2026-02-06 200956.png" alt="Splunk & AI Threat Hunting Architecture" width="850"/>
   <br>
-  <b>Figure 1: Complete Threat Intelligence Automation Architecture</b>
+  <b>Figure 1: Complete Splunk & AI Automation Architecture</b>
 </p>
 
 ## 🚀 Usage: How to Import
@@ -24,151 +24,76 @@ To use this automation in your own n8n instance:
 
 ---
 
-##  Detailed Workflow Breakdown
+## 🎯 Detailed Workflow Breakdown
 
-###  FLOW 1: Scheduled Threat Intelligence Collection
-* **Node 1: Schedule Trigger**
-    * *Purpose:* Initiates the collection pipeline.
-    * *Configuration:* Runs at minute 0 of every hour (`0 * * * *`).
-* **Node 2: Fetch Threat Feed A (HTTP Request)**
-    * *Method:* GET request to primary threat intelligence API.
-    * *Headers:* Authenticated via API Key.
-    * *Output:* JSON array of raw indicators (IPs, domains, hashes).
-* **Node 3: Parse Threat Feed A (Code Node)**
-    * *Logic:* Normalizes the API response; extracts IP addresses, threat types, and confidence scores; converts timestamps to ISO 8601.
-* **Node 4: Fetch Threat Feed B (HTTP Request)**
-    * *Purpose:* Secondary source for correlation.
-    * *Method:* GET request with distinct API credentials.
-* **Node 5: Parse Threat Feed B (Code Node)**
-    * *Logic:* Maps unique fields from Feed B to the standard schema used in Node 3.
-* **Node 6: Merge Threat Feeds**
-    * *Mode:* Append (keeps all records from both feeds).
-* **Node 7: Remove Duplicates (Code Node)**
-    * *Logic:* Uses a `Set` data structure to track unique IPs.
-    * *Priority:* Retains the entry with the highest confidence score if duplicates are found.
+### 🌊 FLOW 1: Splunk Ingestion & Pre-Processing
+This flow handles the high-volume deterministic filtering before engaging the AI, ensuring computational resources are only spent on genuine anomalies.
+* **Poll Splunk Every 5 Minutes:** Cron-based schedule trigger ensuring continuous monitoring.
+* **Get Security Logs from Splunk:** Executes a predefined search query to pull recent authentication and security events.
+* **Split Log Entries & Filter Failed Logins:** Normalizes the JSON arrays and filters the stream specifically for failed authentication attempts.
+* **Extract Key Fields & Collect Attempts:** Isolates the source IP, timestamp, and target user.
+* **Count Attempts by IP & Check Threshold Exceeded:** A custom code node aggregates attempts per IP over the 5-minute window. An IF node acts as the gatekeeper—if the threshold (e.g., >10 failed logins) is exceeded, the flow proceeds to the AI.
 
-###  FLOW 2: Real-Time Threat Alert Processing
-* **Node 8: Webhook Trigger**
-    * *Method:* POST
-    * *Path:* `/threat-alert`
-    * *Auth:* Header Auth (`X-API-Key`)
-    * *Payload:* `{ "ip": "x.x.x.x", "type": "malware", "severity": "high" }`
-* **Node 9: Validate Webhook Data (IF Node)**
-    * *Conditions:* Checks if IP is present, Severity is valid (low/medium/high/critical), and Timestamp exists.
-* **Node 10: Enrich IP Data (HTTP Request)**
-    * *API:* IP Geolocation Service.
-    * *Data:* Retrieves Country, ISP, and known malicious status.
-* **Node 11: Format Enriched Data (Code Node)**
-    * *Logic:* Merges geolocation context into the threat object and adds a processing timestamp.
+### 🧠 FLOW 2: Agentic AI Threat Analysis
+When a threshold is breached, the data is passed to the **AI Threat Analyzer**, an advanced LangChain-based agent node equipped with conversational memory and a suite of active tools.
+* **OpenAI GPT-4 (LLM):** The core reasoning engine.
+* **Threat Context Memory:** Maintains state during the investigation to correlate multi-step attack patterns.
+* **Agent Tools (The AI's Capabilities):**
+    * *Threat Intelligence API Tool:* Reaches out to external APIs (e.g., AbuseIPDB, VirusTotal) to check IP reputation.
+    * *Risk Score Calculator:* A mathematical tool the AI uses to assign a quantitative risk severity.
+    * *Splunk Investigation Tool:* Allows the AI to autonomously query Splunk for *other* activities performed by the suspicious IP.
+    * *Threat Intelligence Knowledge Base:* A Pinecone vector store using OpenAI Embeddings to recall historical company threat profiles.
+    * *Active Response Tools:* Includes a *Block IP Address* webhook, a *Jira Ticket Tool*, and a *PagerDuty Incident Tool* enabling the AI to take immediate containment actions.
 
-###  FLOW 3: Manual Threat Investigation (Ad-Hoc)
-* **Node 12: Manual Trigger**
-    * *Use Case:* Analyst clicks "Test Workflow" for specific threat hunting.
-* **Node 13: Input IP Address (Set Node)**
-    * *Config:* Defines the specific IP to investigate.
-* **Node 14: Check Multiple Databases (HTTP Request - Parallel)**
-    * *Simultaneous Queries:* AbuseIPDB, VirusTotal, Shodan, AlienVault OTX.
-* **Nodes 15-18: Parse Database Responses (Code Nodes)**
-    * *Node 15:* Extracts AbuseIPDB confidence score.
-    * *Node 16:* Extracts VirusTotal detection ratio.
-    * *Node 17:* Extracts Shodan open ports/services.
-    * *Node 18:* Extracts AlienVault pulse associations.
-* **Node 19: Aggregate Intelligence (Code Node)**
-    * *Logic:* Calculates average confidence, lists all detected threat types, and identifies the highest severity rating across all sources.
+### 📢 FLOW 3: Multi-Channel Alerting
+Once the AI reaches a conclusion, it standardizes the output and immediately notifies the team.
+* **Format Alert Message:** Parses the AI's reasoning into a readable summary.
+* **Send to Splunk:** Writes the AI's findings back into Splunk as a new, enriched security event.
+* **Notify Slack Channel & Email Security Team:** Pushes the immediate context to human analysts for situational awareness.
 
-###  FLOW 4: Risk Scoring Engine
-* **Node 20: Calculate Base Risk Score (Code Node)**
-    * *Formula:*
-      ```javascript
-      // Weights: Confidence (40%), Detection Count (30%), Recency (20%), Geo (10%)
-      const riskScore = (dbCount * 30) + (avgConfidence * 40) + (recencyScore * 20) + (geoRisk * 10);
-      ```
-* **Node 21: Determine Threat Level (IF Node)**
-    * *Critical:* Score 76-100
-    * *High:* Score 51-75
-    * *Medium:* Score 26-50
-    * *Low:* Score 0-25
+### 🚦 FLOW 4: Severity Routing & Automated Ticketing
+The AI's Structured Threat Output is parsed and routed based on the calculated severity level (Critical, High, Medium, Low).
+* **Critical Path:**
+    * *Prepare Critical Incident Data* ➔ *Create PagerDuty Alert* ➔ *Aggregate Incident Reports* ➔ *Create ServiceNow Incident*.
+    * Ensures immediate page-outs for on-call engineers and formal P1 tracking in ServiceNow.
+* **High Path:**
+    * *Prepare High Priority Ticket* ➔ *Create Jira Security Ticket*.
+    * Routes to the standard SOC backlog for investigation.
+* **Medium/Low Path:** * Bypasses active paging to prevent alert fatigue, flowing directly into the correlation engine.
 
-### 💾 FLOW 5: Data Preparation & Storage
-* **Node 22: Prepare Threat Data (Code Node)**
-    * *Schema:* `ipAddress`, `threatLevel`, `riskScore`, `timestamp`, `indicators` (JSON string).
-* **Node 23: Store Threat Intelligence (Data Table)**
-    * *Operation:* Upsert (Update if IP exists, Insert if new).
-    * *Match Column:* `ipAddress`.
-
-### 🚨 FLOW 6: Critical Threat Response (>75)
-* **Node 24: Format Critical Alert**
-    * *Content:* Detailed IP/Geo info, risk breakdown, and recommended actions.
-* **Node 25: Send Email Alert**
-    * *Subject:* `🚨 CRITICAL THREAT DETECTED: [IP Address]`
-    * *Priority:* High.
-* **Node 26: Post to Slack**
-    * *Channel:* `#security-alerts`
-    * *Mentions:* `@security-team`
-* **Node 27: Create Incident Ticket**
-    * *Integration:* ServiceNow/Jira/PagerDuty.
-    * *Priority:* P1 (Critical).
-* **Node 28: Trigger Firewall Block (HTTP Request)**
-    * *Action:* API call to Firewall (e.g., pfSense/Cisco) to add IP to blocklist permanently.
-
-###  FLOW 7: High Threat Response (51-75)
-* **Nodes 29-31:** Formats alert, sends non-urgent email, and posts to `#security-monitoring` Slack channel.
-* **Node 32: Add to Watch List (HTTP Request)**
-    * *Action:* Tags IP for enhanced logging in the monitoring system.
-
-###  FLOW 8: Medium/Low Threat Logging (<51)
-* **Nodes 33-35:** Formats log entry, sends payload to SIEM (Splunk/ELK/QRadar), and updates internal threat database.
-
-###  FLOW 9: Reporting & Analytics
-* **Node 36: Daily Summary Trigger:** Runs daily at 8:00 AM.
-* **Node 37: Query Threat Data:** Retrieves all records where `timestamp > (now - 24h)`.
-* **Node 38: Generate Summary Report:** Calculates total threats, severity breakdown, top 10 malicious IPs, and geographic trends.
+### 💾 FLOW 5: Advanced Threat Correlation & Storage
+All processed threats, regardless of severity, are cataloged for future intelligence.
+* **Advanced Threat Correlation:** Merges the new AI findings with historical data and incoming incident tickets.
+* **Store Threat Intelligence:** Pushes the structured JSON into a persistent Data Table or external SQL database.
+* **Detect New Threats:** Compares the stored dataset against incoming indicators to identify net-new threat actors (Zero-Days or novel infrastructure).
 
 ---
 
-##  Configuration & Setup Guide
+## 🛠️ Configuration & Setup Guide
 
-### Step 1: Create Data Tables (CRITICAL)
-*Data tables are not created automatically. You must configure this manually first.*
-1.  Go to **Data Tables** tab in n8n.
-2.  Create Table Name: `Store Threat Intelligence`
-3.  Add Columns:
-    * `ipAddress` (Type: Text)
-    * `threatLevel` (Type: Text)
-    * `riskScore` (Type: Number)
-    * `timestamp` (Type: Text)
-    * `indicators` (Type: Text)
+### Step 1: Splunk Integration
+1.  Generate a Splunk **HEC (HTTP Event Collector) Token** or REST API credentials.
+2.  In n8n, configure the **Splunk** credentials.
+3.  Update the *Get Security Logs from Splunk* node with your specific index and search query (e.g., `index=security sourcetype=linux_secure action=failure`).
 
-### Step 2: Configure API Credentials
-* **AbuseIPDB:** Create "Header Auth" → Name: `Key`, Value: `[Your_API_Key]`.
-* **VirusTotal:** Create "Header Auth" → Name: `x-apikey`, Value: `[Your_API_Key]`.
-* **Shodan:** Use "Generic Credential Type" → API Key.
+### Step 2: Configure OpenAI & Vector DB
+1.  **OpenAI:** Add your API key in the n8n credentials. Ensure you have access to `gpt-4` or `gpt-4-turbo`.
+2.  **Embeddings/Knowledge Base:** Set up a Pinecone index (1536 dimensions for OpenAI). Connect the *Threat Intelligence Knowledge Base* node using your Pinecone API key and Environment string.
 
-### Step 3: Configure Notifications
-* **Email (Gmail):** Use `smtp.gmail.com`, Port `587`, TLS. Use an **App Password** (not your login password).
-* **Slack:** Create an App at `api.slack.com`. Add scopes: `chat:write`, `chat:write.public`, `channels:read`. Use the **Bot User OAuth Token** (`xoxb-...`).
+### Step 3: Configure Agent Tools (HTTP Requests)
+The AI Agent relies on API connections to take action. Ensure credentials are set for:
+* **Threat Intelligence API Tool:** Header Auth for your preferred provider (e.g., AbuseIPDB `Key`).
+* **Block IP Address:** Configure the POST request to point to your edge firewall/WAF API (e.g., Palo Alto, Cloudflare).
 
-### Step 4: Configure Webhook Source
-External systems must send POST requests to your production Webhook URL with the header `X-API-Key: [Your_Secret_String]`.
-**Expected Payload:**
-```json
-{
-  "ip": "192.168.1.100",
-  "type": "malware",
-  "severity": "high",
-  "timestamp": "2024-01-15T10:30:00Z"
-}
-```
-
-
-### Step 5: SIEM & Firewall Integration
-* **Splunk:** POST to `https://splunk:8088/services/collector` with Header `Authorization: Splunk [HEC_TOKEN]`.
-* **Firewall (pfSense Example):** POST to `/api/v1/firewall/alias/entry` with payload `{"address": "{{$json.ipAddress}}"}`.
+### Step 4: Ticketing & Notification Integrations
+* **Slack:** Use a Bot User OAuth Token (`xoxb-`) with `chat:write` permissions. Set the target channel in the *Notify Slack Channel* node.
+* **PagerDuty:** Generate an API Integration Key for your Security service and add it to the *PagerDuty Incident Tool* / *Create PagerDuty Alert* nodes.
+* **Jira & ServiceNow:** Add standard Basic Auth or OAuth2 credentials for your respective ITIL platforms to enable automated ticket creation.
 
 ---
 
-##  Impact & Outcomes
-* **Response Time:** Critical threats are blocked at the firewall level within seconds of detection.
-* **Accuracy:** Multi-source correlation and the custom risk scoring engine drastically reduce false positives.
-* **Scalability:** The modular design allows for adding new threat feeds (Nodes 4-5) without disrupting the core logic.
-* **Compliance:** Provides a complete, persistent audit trail of all detected threats and automated actions.
+## 📊 Impact & Outcomes
+* **Zero-Touch Triage:** The AI Threat Analyzer autonomously handles the initial 15-20 minutes of investigation (correlating logs, checking threat intel, querying Splunk) instantly.
+* **Alert Fatigue Elimination:** By filtering out standard failed logins and only escalating threshold breaches enriched by AI context, SOC analysts only see high-fidelity, actionable alerts.
+* **Active Containment:** The agentic architecture allows the system to not just alert, but actively execute IP blocks on the firewall during Critical incidents.
+* **Unified Compliance:** Every step—from Splunk ingestion to AI reasoning to ServiceNow ticket creation—is completely logged and auditable.
